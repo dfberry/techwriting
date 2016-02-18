@@ -15,15 +15,7 @@ The naming convention and templating allows us to focus on the few components we
 ##pm2 Dashboard Design
 The 'pm2 list' command shows a table with information on the command line. 
 
-```
-┌──────────────┬────┬──────┬───────┬────────┬─────────┬────────┬─────────────┬──────────┐
-│ App name     │ id │ mode │ pid   │ status │ restart │ uptime │ memory      │ watching │
-├──────────────┼────┼──────┼───────┼────────┼─────────┼────────┼─────────────┼──────────┤
-│ dfberry-8080 │ 0  │ fork │ 1628  │ online │ 0       │ 12D    │ 27.113 MB   │ disabled │
-│ linux-dash   │ 1  │ fork │ 29868 │ online │ 21      │ 7D     │ 20.270 MB   │ disabled │
-└──────────────┴────┴──────┴───────┴────────┴─────────┴────────┴─────────────┴──────────┘
- Use `pm2 show <id|name>` to get more details about an app
-```
+![pm2 list](pm2-list.png)
 
 We want to show this in the linux-dash website on the applications tab in its own table. 
 
@@ -33,8 +25,6 @@ In order to do that, we need:
 
 1. a new shell script - to capture the results of running "pm2 list" and return json
 2. changes to glue - to find script and display as table
-
-I'll discuss each piece.
 
 ##Installing linux-dash
 If you do not have linux-dash installed, you will need to get it. Clone it from [github](https://github.com/afaqurk/linux-dash). Make sure scripts have execute status and the webserver is started with SUDO privileges. 
@@ -52,15 +42,8 @@ The second choice is a table (array of key/value pairs) with more columns which 
 ###pm2 list output
 The command I usually run at the command line is "pm2 list" -- the response shows each process with uptime, status, and other information in a table. 
 
-```
-1 ┌──────────────┬────┬──────┬───────┬────────┬─────────┬────────┬─────────────┬──────────┐
-2 │ App name     │ id │ mode │ pid   │ status │ restart │ uptime │ memory      │ watching │
-3 ├──────────────┼────┼──────┼───────┼────────┼─────────┼────────┼─────────────┼──────────┤
-4 │ dfberry-8080 │ 0  │ fork │ 1628  │ online │ 0       │ 12D    │ 27.113 MB   │ disabled │
-5 │ linux-dash   │ 1  │ fork │ 29868 │ online │ 21      │ 7D     │ 20.270 MB   │ disabled │
-6 └──────────────┴────┴──────┴───────┴────────┴─────────┴────────┴─────────────┴──────────┘
-7  Use `pm2 show <id|name>` to get more details about an app
-```
+![pm2 list](pm2-list-numbers.png)
+
 We need to know which lines to ignore (1-3, 6, 7) and which to include (only 4 and 5). 
 
 Make sure each line of your output is accounted for as either ignored or parsed. While I ignored the header and footer, perhaps your data should be included. 
@@ -136,8 +119,9 @@ else
 fi
 ```
 
-Make sure the script has execute permissions then try it out on your favorite linux OS. If you have pm2 installed and running, you should get a json object filled in with values.    
-At this point, you are done with the server-side code. Isn't that amazing? 
+Make sure the script has execute permissions then try it out on your favorite linux OS. If you have pm2 installed and running, you should get a json object filled in with values.   
+ 
+At this point, we are done with the server-side code. Isn't that amazing? 
 
 ###Naming conventions
 The client-side piece of the code is connected to the server-side script via the naming convention. I called this script pm2.sh on the server in the server/modules/shell_files directory. For the client-side/Angular files, you need to use the same name or Angular version of the same name.  

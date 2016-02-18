@@ -1,0 +1,187 @@
+<h1 id="addingpm2statustolinuxdash">Adding pm2 status to linux-dash</h1>
+
+<h2 id="linuxdash">linux-dash</h2>
+
+<p><a href="https://github.com/afaqurk/linux-dash">linux-dash</a> is a light-weight, open-source web dashboard to monitor your linux machine or virtual machine. You can find this package on <a href="https://github.com/afaqurk/linux-dash">Github</a>. </p>
+
+<p><img src="linux-dash-system-status.png" alt="" /></p>
+
+<p>The dashboard reports many different aspects of our linux installation via shell scripts (*.sh). This allows the dashboard to be light-weight, and work on most linux machines. The website displays running charts, and tables. The web site can be node, php, or go. For the node webserver, the only dependencies are express and websocket. </p>
+
+<h2 id="extendinglinuxdash">Extending linux-dash</h2>
+
+<p>You may have a few extra services or programs running on your linux installation that you would like to display on linux-dash . I use <a href="http://pm2.keymetrics.io/">pm2</a>, a process manager. Adding a table to display the pm2 status information was very easy -- even if you are not familiar with client-side Angular directives or server-side Node.JS or server-side shell scripts. </p>
+
+<p>The naming convention and templating allows us to focus on the few components we need to build without struggling on the glue between them. </p>
+
+<h2 id="pm2dashboarddesign">pm2 Dashboard Design</h2>
+
+<p>The 'pm2 list' command shows a table with information on the command line. </p>
+
+<p><img src="pm2-list.png" alt="pm2 list" /></p>
+
+<p>We want to show this in the linux-dash website on the applications tab in its own table. </p>
+
+<p><img src="linux-dash-pm2.png" alt="linux dashboard with pm2 listing" /></p>
+
+<p>In order to do that, we need:</p>
+
+<ol>
+<li>a new shell script - to capture the results of running "pm2 list" and return json</li>
+
+<li>changes to glue - to find script and display as table</li>
+</ol>
+
+<p>I'll discuss each piece.</p>
+
+<h2 id="installinglinuxdash">Installing linux-dash</h2>
+
+<p>If you do not have linux-dash installed, you will need to get it. Clone it from <a href="https://github.com/afaqurk/linux-dash">github</a>. Make sure scripts have execute status and the webserver is started with SUDO privileges. </p>
+
+<h2 id="writingtheserversideshellscript">Writing the server-side Shell script</h2>
+
+<p>This section applies to services with a snapshot or single point in time.  </p>
+
+<p>If you have not written a shell script before, no need to worry. There are plenty of examples of shell scripts at /server/modules/shell_files. The final output of the shell script needs to either be an empty json object such as {} or an array of values such as [{},{},{}]. The values will be key/value pairs (1 key, 1 value) which will diplay as a 2xn grid of information.</p>
+
+<p><img src="linux-dash-2byN.png" alt="2xN table" /></p>
+
+<p>The second choice is a table (array of key/value pairs) with more columns which is what we need.</p>
+
+<h3 id="pm2listoutput">pm2 list output</h3>
+
+<p>The command I usually run at the command line is "pm2 list" -- the response shows each process with uptime, status, and other information in a table. </p>
+
+<p><img src="pm2-list-numbers.png" alt="pm2 list" /></p>
+
+<p>We need to know which lines to ignore (1-3, 6, 7) and which to include (only 4 and 5). </p>
+
+<p>Make sure each line of your output is accounted for as either ignored or parsed. While I ignored the header and footer, perhaps your data should be included. </p>
+
+<p>The shell script needs to be able to read each row into a meaningful json object such as:</p>
+
+<pre><code>[  
+   {  
+      "appName":"dfberry-8080",
+      "id":"0",
+      "mode":"fork",
+      "pid":"1628",
+      "status":"online",
+      "restart":"0",
+      "uptime":"13D",
+      "memory":"20.043MB",
+      "watching":"disabled"
+   },
+   {  
+      "appName":"linux-dash",
+      "id":"1",
+      "mode":"fork",
+      "pid":"29868",
+      "status":"online",
+      "restart":"21",
+      "uptime":"7D",
+      "memory":"28.293MB",
+      "watching":"disabled"
+   }
+]
+</code></pre>
+
+<h2 id="pm2sh">pm2.sh</h2>
+
+<p>The script has 3 sections. The first section sets the command to the variable 'command'. The second section executes the command and sets the returned text (the command line table) to the variable 'data'. The third section is in two sections. The first section (a) executes if the 'data' variable has any length. The second section (b) returns an empty json object if the 'data' variable is empty.</p>
+
+<p>Most of the work is in section 3.a with the 'awk' command. The first line pipes the 'data' variable through tail, only passing lines 4 or greater to the next pipe which is head. Head takes all the lines except the last 2 and pipes the results to awk.</p>
+
+<p>The rest of 3.a is working through each column of each row, getting the values $6 means the sixth column. Columns include column break characters of '|' so make sure to include them in the count. </p>
+
+<p>If you are watching the trailing commas, you may be wondering how the last one is removed.  Bash has <a href="http://unix.stackexchange.com/questions/144298/delete-the-last-character-of-a-string-using-string-manipulation-in-shell-script">a couple of different ways</a>, I'm using the older bash version syntax which is ${t%?}.  </p>
+
+<pre><code>#!/bin/bash
+
+#1: set text of command
+command="pm2 list"
+
+#2: execute command
+data="$($command)"
+
+#3: only process data if variable has a length 
+#this should handle cases where pm2 is not installed
+if [ -n "$data" ]; then
+
+    #a: start processing data on line 4
+    #don't process last 2 lines
+    json=$( echo "$data" | tail -n +4 | head -n +2 \
+    | awk   '{print "{"}\
+        {print "\"appName\":\"" $2 "\","} \
+        {print "\"id\":\"" $4 "\","} \
+        {print "\"mode\":\"" $6 "\","} \
+        {print "\"pid\":\"" $8 "\","}\
+        {print "\"status\":\"" $10 "\","}\
+        {print "\"restart\":\"" $12 "\","}\
+        {print "\"uptime\":\"" $14 "\","}\
+        {print "\"memory\":\"" $16 $17 "\","}\
+        {print "\"watching\":\"" $19 "\""}\
+        {print "},"}')
+    #make sure to remove last comma and print in array
+    echo "[" ${json%?} "]"
+else
+    #b: no data found so return empty json object
+    echo "{}"
+fi
+</code></pre>
+
+<p>Make sure the script has execute permissions then try it out on your favorite linux OS. If you have pm2 installed and running, you should get a json object filled in with values. <br />
+At this point, you are done with the server-side code. Isn't that amazing? </p>
+
+<h3 id="namingconventions">Naming conventions</h3>
+
+<p>The client-side piece of the code is connected to the server-side script via the naming convention. I called this script pm2.sh on the server in the server/modules/shell_files directory. For the client-side/Angular files, you need to use the same name or Angular version of the same name.  </p>
+
+<h2 id="clientsidechangesforangular">Client-side changes for Angular</h2>
+
+<p>The Angular directive will be pm2 and used like:</p>
+
+<pre><code>&lt;pm2&gt;&lt;/pm2&gt;
+</code></pre>
+
+<p>Add this to the /templates/sections/applications.html so that the entire file looks like:</p>
+
+<pre><code>&lt;common-applications&gt;&lt;/common-applications&gt;
+&lt;memcached&gt;&lt;/memcached&gt;
+&lt;redis&gt;&lt;/redis&gt;
+&lt;pm2&gt;&lt;/pm2&gt;
+</code></pre>
+
+<p>Since the pm2 directive is at the end, it will display as the last table. Notice I haven't actually built a table in html, css, or any other method. I just added a directive using a naming convention tied to the server-side script. Pretty cool, huh?</p>
+
+<h3 id="routingtothenewangulardirective">Routing to the new Angular directive</h3>
+
+<p>The last piece is to route the directive 'pm2' to a call to the server for the 'pm2.sh' script.  </p>
+
+<p>In the /js/modules.js file, the routing for simple tables in controlled by the 'simpleTableModules' variable. Find that section. We need to add a new json object to the array of name/template sections. </p>
+
+<pre><code>{
+    name: 'pm2',
+    template: '&lt;table-data heading="P(rocess) M(anager) 2" module-name="pm2" info="pm2 read-out."&gt;&lt;/table-data&gt;'
+}, 
+</code></pre>
+
+<p>
+It doesn't matter where in the array the section is added, just that the naming convention is used. Notice the name is 'pm2' and the template.module-name is set to the same value of 'pm2'. </p>
+
+<p>If I wanted a simple table of 2 columns instead of 9 columns, the json object would look like:</p>
+
+<pre><code>{
+    name: 'pm2',
+    template: '&lt;key-value-list heading="P(rocess) M(anager) 2" module-name="pm2" info="pm2 read-out."&gt;&lt;/key-value-list&gt;'
+},
+</code></pre>
+
+<p><br />
+The key-value-list changes the html display to a 2xN column table.     </p>
+
+<h2 id="summary">Summary</h2>
+
+<p>With very little code, you can add reports to linux-dash. You need to write a shell script with execute permissions that outputs a json object for the server-side. For the client-side you need to create a directive via adding its syntax to the appropriate section template. Then add a route to the modules.js file. The biggest piece of work is getting the shell script to work. </p>
+
+<p>Now that you know how to create new reporting tables for linux-dash, feel free to add your own code to the project via a pull request. </p>
