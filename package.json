@@ -1,0 +1,14 @@
+{
+  "name": "techwriting",
+  "version": "1.0.0",
+  "description": "",
+  "main": "convertToHTML.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "showdown": "^1.3.0"
+  }
+}
